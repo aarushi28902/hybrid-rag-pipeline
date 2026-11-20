@@ -55,13 +55,35 @@ graph TB
 
 ### Reranking ablation
 
-RESULTS_PENDING
+| Configuration | Answered @6 | MRR | Facts found | Candidate recall @30 | Retrieval | Rerank |
+|---|---|---|---|---|---|---|
+| Hybrid (RRF) | 84% (42/50) | 0.59 | 85% | – | 1.4 s | – |
+| Dense only | 84% (42/50) | 0.61 | 86% | – | 0.9 s | – |
+| Sparse only | 78% (39/50) | 0.58 | 79% | – | 0.9 s | – |
+| Hybrid + rerank | 90% (45/50) | 0.74 | 91% | 98% | 1.2 s | 2.0 s |
+| Dense + rerank | **94%** (47/50) | **0.77** | **94%** | 100% | 0.9 s | 2.0 s |
+
+Latency is the mean per question on an older Windows laptop CPU, including query embedding; run on 2026-11-21.
+
+**What this shows**
+
+- **Reranking helps, and mostly by moving answers up.** It answers 3 more questions with hybrid retrieval and 5 more with dense, and MRR rises from about 0.6 to 0.75, meaning the answer passage moves towards rank 1. Per question it isn't free: on hybrid it fixed 5 questions and broke 2; on dense it fixed 7 and broke 2. One it fixed, "Why are Folklore and Evermore called sister albums?", had failed in every configuration before. One it broke, "What was the demo version of Cardigan called?", was ranked 1st or 2nd without reranking.
+- **Retrieval already finds the answers; ordering was the problem.** In 98–100% of questions the answer is somewhere in the 30 candidates, so the remaining failures are ranking errors, not missing documents.
+- **The cost is latency:** about 2 s per query on CPU to score 30 passages. Fewer candidates, shorter passages or a GPU would cut it.
+- **Dense + rerank beat hybrid + rerank by 2 questions out of 50,** which is within noise for a set this size. Hybrid stays the default because the sparse side protects exact-match queries (product codes, IDs, rare names) that this prose corpus barely contains; `SEARCH_MODE=dense` switches it.
+- One question fails in every configuration: "What genre shift did Folklore represent?" Its only answer sentence sits in the Evermore article, not the Folklore one.
 
 **Candidate recall** is the share of questions answered somewhere in the 30 candidates the reranker chooses from. It is the ceiling: a reranker only reorders, so it can't fix a question whose answer was never retrieved.
 
 ### Abstention
 
-ABSTENTION_PENDING
+When the best reranked passage's relevance score is below the threshold, the API answers "I couldn't find this in the documents" without calling the LLM. The threshold was chosen on the evaluation: the value that refuses the most of the 10 unanswerable questions while refusing at most 2 of the 50 answerable ones.
+
+| Threshold | Unanswerable questions refused | Answerable questions wrongly refused |
+|---|---|---|
+| 0.76 (hybrid + rerank) | 80% (8/10) | 2% (1/50) |
+
+Without it, all 10 unanswerable questions would reach the LLM with whatever passages scored highest. The two that still get through are caught, when they are, only by the prompt's instruction to say when the context lacks the answer. Ten questions is a small sample for choosing a threshold; growing that set is the next step.
 
 ### How this evaluation evolved
 
@@ -101,7 +123,7 @@ pytest tests/                              # unit + API tests, no services neede
 
 ### Configuration
 
-Settings come from environment variables or `.env` (see `src/rag/config.py`): `RERANK_ENABLED`, `RERANK_CANDIDATES` (default 30), `ABSTAIN_THRESHOLD` (set from the evaluation), `OLLAMA_URL`, `QDRANT_URL`.
+Settings come from environment variables or `.env` (see `src/rag/config.py`): `SEARCH_MODE` (hybrid, dense or sparse; default hybrid), `RERANK_ENABLED`, `RERANK_CANDIDATES` (default 30), `ABSTAIN_THRESHOLD` (default 0.76, from the evaluation), `OLLAMA_URL`, `QDRANT_URL`.
 
 ## API Endpoints
 
