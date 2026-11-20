@@ -7,9 +7,11 @@ Usage (Qdrant running, corpus ingested with scripts/ingest_taylor_swift.py):
     python -m eval.run_pipeline_eval --modes hybrid --ragas          # + RAGAS context metrics
     python -m eval.run_pipeline_eval --modes hybrid --ragas --full   # + faithfulness, relevancy
 
-Retrieval metrics need no LLM:
-  hit_rate  share of questions where a top-k passage contains the gold passage
-  mrr       mean of 1 / rank of the first such passage (0 when none)
+Retrieval metrics need no LLM. The answer key (eval/datasets) lists, for each
+question, the facts its answer needs and every corpus sentence stating each fact.
+  answered       share of questions where the top-k passages contain every fact
+  mrr            mean of 1 / (rank by which every fact has appeared), 0 when not answered
+  fact_coverage  mean share of a question's facts found in the top k (partial credit)
 
 Writes per-question rows to eval/results/<mode>.jsonl and a summary to
 eval/results/summary.json, so every number in the README can be traced.
@@ -24,7 +26,7 @@ from pathlib import Path
 
 from qdrant_client import AsyncQdrantClient
 
-from eval.retrieval_metrics import first_hit_rank, hit_bar, summarise
+from eval.retrieval_metrics import answer_rank, hit_bar, summarise
 from src.rag.ingestion.chunker import ParentChildChunker
 from src.rag.retrieval.embedder import EmbedderService
 from src.rag.retrieval.hybrid_search import HybridSearcher
@@ -49,24 +51,33 @@ async def generate(generator, question: str, results) -> str:
     return "".join([tok async for tok in generator.stream(query=question, chunks=results)])
 
 
+def score(row: dict, retrieved: list[str], parents: list[str]) -> tuple[int | None, int, int]:
+    """(answer rank or None, facts found, facts needed) for one question."""
+    facts = row["evidence"]  # [[sentences stating fact 1], [fact 2], ...]
+    bars = [[hit_bar(s, parents) for s in fact] for fact in facts]
+    rank, found = answer_rank(facts, retrieved, bars)
+    return rank, found, len(facts)
+
+
 async def run_mode(mode, rows, searcher, collection, top_k, parents, generator=None):
     out = []
     for i, row in enumerate(rows, start=1):
         results = await searcher.search(row["question"], collection, top_k=top_k, mode=mode)
         retrieved = [r.text for r in results]
-        gold = row["contexts"]  # hand-picked gold passages, used only as the answer key
-        bars = [hit_bar(g, parents) for g in gold]
+        rank, found, needed = score(row, retrieved, parents)
         record = {
             "question": row["question"],
             "ground_truth": row["ground_truth"],
             "retrieved_sources": [r.source for r in results],
             "contexts": retrieved,
-            "first_hit_rank": first_hit_rank(gold, retrieved, bars),
+            "answer_rank": rank,
+            "facts_found": found,
+            "facts_needed": needed,
         }
         if generator is not None:
             record["answer"] = await generate(generator, row["question"], results)
         out.append(record)
-        print(f"  [{mode}] {i}/{len(rows)} hit@rank={record['first_hit_rank']}", flush=True)
+        print(f"  [{mode}] {i}/{len(rows)} facts {found}/{needed}, answered@rank={rank}", flush=True)
     return out
 
 
@@ -129,7 +140,8 @@ async def main() -> None:
         "date": date.today().isoformat(),
         "dataset": args.dataset,
         "top_k": args.top_k,
-        "hit_threshold": "passage holds >= 90% of the gold passage's words (or the corpus best)",
+        "scoring": "answered = every fact in the answer key appears in a top-k passage; "
+        "a passage contains a sentence when it holds >= 90% of its words (or the corpus best)",
         "modes": {},
     }
 
@@ -141,16 +153,19 @@ async def main() -> None:
         with (RESULTS_DIR / f"{mode}.jsonl").open("w", encoding="utf-8") as f:
             for r in records:
                 f.write(json.dumps(r, ensure_ascii=False) + "\n")
-        summary["modes"][mode] = summarise([r["first_hit_rank"] for r in records])
+        summary["modes"][mode] = summarise(
+            [r["answer_rank"] for r in records],
+            [r["facts_found"] / r["facts_needed"] for r in records],
+        )
         if args.ragas and mode == args.modes[0]:
             print(f"Running RAGAS on {mode} (slow on CPU)...")
             summary["modes"][mode]["ragas"] = run_ragas(records, args.full)
 
     (RESULTS_DIR / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
-    print(f"\n{'mode':<8} {'hit@' + str(args.top_k):>8} {'MRR':>6}")
+    print(f"\n{'mode':<8} {'answered@' + str(args.top_k):>12} {'MRR':>6} {'facts':>6}")
     for mode, s in summary["modes"].items():
-        print(f"{mode:<8} {s['hit_rate']:>8.3f} {s['mrr']:>6.3f}")
+        print(f"{mode:<8} {s['answered']:>12.3f} {s['mrr']:>6.3f} {s['fact_coverage']:>6.3f}")
         if "ragas" in s:
             print("         ragas:", s["ragas"])
     print(f"\nSaved per-question rows and summary to {RESULTS_DIR}/")

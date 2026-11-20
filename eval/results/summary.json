@@ -1,23 +1,27 @@
 {
   "date": "2026-11-20",
+  "rescored": "2026-11-20",
   "dataset": "eval/datasets/taylor_swift_qa.jsonl",
   "top_k": 6,
-  "hit_threshold": "passage holds >= 90% of the gold passage's words (or the corpus best)",
+  "scoring": "answered = every fact in the answer key appears in a top-k passage; a passage contains a sentence when it holds >= 90% of its words (or the corpus best)",
   "modes": {
     "hybrid": {
       "questions": 20,
-      "hit_rate": 0.5,
-      "mrr": 0.223
+      "answered": 0.85,
+      "mrr": 0.481,
+      "fact_coverage": 0.875
     },
     "dense": {
       "questions": 20,
-      "hit_rate": 0.6,
-      "mrr": 0.245
+      "answered": 0.8,
+      "mrr": 0.496,
+      "fact_coverage": 0.85
     },
     "sparse": {
       "questions": 20,
-      "hit_rate": 0.4,
-      "mrr": 0.163
+      "answered": 0.8,
+      "mrr": 0.531,
+      "fact_coverage": 0.825
     }
   }
 }
