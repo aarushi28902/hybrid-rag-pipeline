@@ -1,27 +1,102 @@
 {
-  "date": "2026-11-20",
-  "rescored": "2026-11-20",
+  "date": "2026-11-21",
   "dataset": "eval/datasets/taylor_swift_qa.jsonl",
+  "questions": 50,
   "top_k": 6,
+  "candidates": 30,
   "scoring": "answered = every fact in the answer key appears in a top-k passage; a passage contains a sentence when it holds >= 90% of its words (or the corpus best)",
   "modes": {
     "hybrid": {
-      "questions": 20,
-      "answered": 0.85,
-      "mrr": 0.481,
-      "fact_coverage": 0.875
+      "questions": 50,
+      "answered": 0.84,
+      "mrr": 0.59,
+      "fact_coverage": 0.85,
+      "retrieval_ms": 1427.0
     },
     "dense": {
-      "questions": 20,
-      "answered": 0.8,
-      "mrr": 0.496,
-      "fact_coverage": 0.85
+      "questions": 50,
+      "answered": 0.84,
+      "mrr": 0.608,
+      "fact_coverage": 0.86,
+      "retrieval_ms": 927.2
     },
     "sparse": {
-      "questions": 20,
-      "answered": 0.8,
-      "mrr": 0.531,
-      "fact_coverage": 0.825
+      "questions": 50,
+      "answered": 0.78,
+      "mrr": 0.583,
+      "fact_coverage": 0.79,
+      "retrieval_ms": 860.8
+    },
+    "hybrid_rerank": {
+      "questions": 50,
+      "answered": 0.9,
+      "mrr": 0.736,
+      "fact_coverage": 0.91,
+      "retrieval_ms": 1151.8,
+      "rerank_ms": 1953.0,
+      "candidate_recall": 0.98
+    },
+    "dense_rerank": {
+      "questions": 50,
+      "answered": 0.94,
+      "mrr": 0.772,
+      "fact_coverage": 0.94,
+      "retrieval_ms": 889.5,
+      "rerank_ms": 1965.3,
+      "candidate_recall": 1.0
     }
+  },
+  "abstention": {
+    "config": "hybrid_rerank",
+    "max_false_abstain": 0.04,
+    "threshold": 0.7609,
+    "false_abstain": 0.02,
+    "correct_abstain": 0.8,
+    "answerable_top_scores": {
+      "min": 0.0278,
+      "median": 0.9978
+    },
+    "unanswerable": [
+      {
+        "question": "What is the title of Taylor Swift's eleventh studio album?",
+        "top_score": 0.9923
+      },
+      {
+        "question": "How many tickets did the Eras Tour sell?",
+        "top_score": 0.1324
+      },
+      {
+        "question": "Who was the opening act on the Eras Tour?",
+        "top_score": 0.4101
+      },
+      {
+        "question": "What is Taylor Swift's net worth?",
+        "top_score": 0.023
+      },
+      {
+        "question": "Who produced Taylor Swift's album Midnights?",
+        "top_score": 0.9957
+      },
+      {
+        "question": "What is the capital of France?",
+        "top_score": 0.0
+      },
+      {
+        "question": "What role did Taylor Swift play in the film Cats?",
+        "top_score": 0.5152
+      },
+      {
+        "question": "How much was Aaron Dessner paid to produce Folklore?",
+        "top_score": 0.6242
+      },
+      {
+        "question": "What is Taylor Swift's recipe for chai cookies?",
+        "top_score": 0.004
+      },
+      {
+        "question": "Which football team does Travis Kelce play for?",
+        "top_score": 0.0
+      }
+    ]
   }
 }
