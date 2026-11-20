@@ -69,6 +69,7 @@ async def query_stream(
                 query=req.query,
                 collection=req.collection,
                 top_k=n_candidates,
+                mode=settings.search_mode,
             )
             RETRIEVAL_LATENCY.observe(time.perf_counter() - t_ret)
 
