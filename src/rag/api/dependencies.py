@@ -16,3 +16,8 @@ def get_embedder(request: Request):
 
 def get_settings_dep():
     return get_settings()
+
+
+def get_reranker(request: Request):
+    """The loaded cross-encoder, or None when reranking is disabled."""
+    return getattr(request.app.state, "reranker", None)

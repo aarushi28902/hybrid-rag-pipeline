@@ -38,3 +38,14 @@ ACTIVE_REQUESTS = Gauge(
     "rag_active_requests",
     "Currently active query requests",
 )
+
+RERANK_LATENCY = Histogram(
+    "rag_rerank_duration_seconds",
+    "Cross-encoder reranking latency",
+    buckets=[0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0],
+)
+
+ABSTENTIONS = Counter(
+    "rag_abstentions_total",
+    "Queries answered with 'not in the documents' because retrieval confidence was too low",
+)
