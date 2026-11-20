@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-20",
+  "dataset": "eval/datasets/taylor_swift_qa.jsonl",
+  "top_k": 6,
+  "hit_threshold": "passage holds >= 90% of the gold passage's words (or the corpus best)",
+  "modes": {
+    "hybrid": {
+      "questions": 20,
+      "hit_rate": 0.5,
+      "mrr": 0.223
+    },
+    "dense": {
+      "questions": 20,
+      "hit_rate": 0.6,
+      "mrr": 0.245
+    },
+    "sparse": {
+      "questions": 20,
+      "hit_rate": 0.4,
+      "mrr": 0.163
+    }
+  }
+}

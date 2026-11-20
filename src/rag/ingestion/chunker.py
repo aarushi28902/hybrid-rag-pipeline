@@ -45,9 +45,12 @@ class ParentChildChunker:
         metadata: dict,
     ) -> Iterator[tuple[Chunk, list[Chunk]]]:
         parent_texts = self._split(text, self.parent_size)
+        source = str(metadata.get("source", ""))
 
-        for parent_text in parent_texts:
-            parent_id = str(uuid.uuid4())
+        for position, parent_text in enumerate(parent_texts):
+            # Deterministic, so re-ingesting a document overwrites its chunks
+            # instead of creating duplicates with new random IDs.
+            parent_id = deterministic_uuid(f"{source}|{position}|{parent_text}")
 
             parent = Chunk(
                 chunk_id=parent_id,
@@ -59,12 +62,14 @@ class ParentChildChunker:
             child_texts = self._split(parent_text, self.child_size)
             children = [
                 Chunk(
-                    chunk_id=deterministic_uuid(ct),
+                    # Include the parent ID: the same child text inside two
+                    # different parents must not overwrite each other.
+                    chunk_id=deterministic_uuid(f"{parent_id}|{i}|{ct}"),
                     parent_id=parent_id,
                     text=ct,
                     metadata={**metadata, "level": "child"},
                 )
-                for ct in child_texts
+                for i, ct in enumerate(child_texts)
             ]
 
             yield parent, children
