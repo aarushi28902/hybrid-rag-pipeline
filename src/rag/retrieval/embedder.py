@@ -31,6 +31,27 @@ class EmbedderService:
         values = [float(v) for v in sparse_weights.values()]
         return dense, SparseEmbedding(indices=indices, values=values)
 
+    async def embed_documents(
+        self, texts: list[str]
+    ) -> list[tuple[list[float], SparseEmbedding]]:
+        """Embed many texts in one model call (much faster than one at a time)."""
+        if not texts:
+            return []
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, self._embed_sync, texts)
+        out = []
+        for dense, weights in zip(result["dense_vecs"], result["lexical_weights"]):
+            out.append(
+                (
+                    dense.tolist(),
+                    SparseEmbedding(
+                        indices=[int(k) for k in weights.keys()],
+                        values=[float(v) for v in weights.values()],
+                    ),
+                )
+            )
+        return out
+
     def _embed_sync(self, texts: list[str]) -> dict:
         assert self._model is not None, "Model not loaded. Call load() first."
         return self._model.encode(

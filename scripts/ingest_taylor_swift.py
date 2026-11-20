@@ -1,13 +1,15 @@
-"""Ingest Taylor Swift Wikipedia articles into Qdrant."""
+"""Ingest the Taylor Swift Wikipedia corpus into Qdrant (recreates the collection)."""
 import asyncio
 from pathlib import Path
+
 from qdrant_client import AsyncQdrantClient
-from qdrant_client.models import (
-    VectorParams, Distance, SparseVectorParams, PointStruct, SparseVector
-)
+from qdrant_client.models import Distance, SparseVectorParams, VectorParams
+
 from src.rag.ingestion.chunker import ParentChildChunker
+from src.rag.ingestion.pipeline import build_points
 from src.rag.retrieval.embedder import EmbedderService
 
+COLLECTION = "enterprise_rag"
 FILES = [
     ("data/folklore_album.txt", "Folklore Album - Wikipedia"),
     ("data/evermore_album.txt", "Evermore Album - Wikipedia"),
@@ -24,51 +26,32 @@ async def main():
     print("Loading embedder...")
     await embedder.load()
 
+    # Start clean so no points from older chunking (without parent_text) remain.
+    if await client.collection_exists(COLLECTION):
+        print("Deleting existing collection...")
+        await client.delete_collection(COLLECTION)
+
     print("Creating collection...")
     await client.create_collection(
-        collection_name="enterprise_rag",
+        collection_name=COLLECTION,
         vectors_config={"dense": VectorParams(size=1024, distance=Distance.COSINE)},
         sparse_vectors_config={"sparse": SparseVectorParams()},
     )
 
     chunker = ParentChildChunker(parent_size=1024, child_size=256, overlap=32)
 
-    total_points = 0
     for filepath, source in FILES:
-        text = Path(filepath).read_text()
+        text = Path(filepath).read_text(encoding="utf-8")
         print(f"\nIngesting: {source} ({len(text)} chars)")
 
         pairs = list(chunker.chunk(text, metadata={"source": source}))
-        points = []
+        points = await build_points(pairs, embedder, source)
+        await client.upsert(collection_name=COLLECTION, points=points)
+        print(f"  -> {len(pairs)} parents, {len(points)} children ingested")
 
-        for parent, children in pairs:
-            for child in children:
-                dense, sparse = await embedder.embed_query(child.text)
-                points.append(
-                    PointStruct(
-                        id=child.chunk_id,
-                        vector={
-                            "dense": dense,
-                            "sparse": SparseVector(
-                                indices=sparse.indices,
-                                values=sparse.values,
-                            ),
-                        },
-                        payload={
-                            "text": child.text,
-                            "chunk_id": child.chunk_id,
-                            "parent_id": child.parent_id,
-                            "source": source,
-                        },
-                    )
-                )
-
-        await client.upsert(collection_name="enterprise_rag", points=points)
-        total_points += len(points)
-        print(f"  → {len(pairs)} parents, {len(points)} children ingested")
-
-    count = await client.count(collection_name="enterprise_rag")
+    count = await client.count(collection_name=COLLECTION)
     print(f"\nTotal points in collection: {count.count}")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())
