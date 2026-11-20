@@ -40,19 +40,27 @@ graph TB
 | Parent text in child payloads | Separate parent store | No second lookup at query time; each parent is copied into its ~5 children, fine at this scale |
 | Hand-written RRF | Qdrant server-side fusion | Full control over k, per-retriever weighting and debugging; a few lines, unit-tested |
 | Ollama local LLM | Hosted API | Zero cost, no data leaves the machine; slower and weaker than a frontier model |
-| End-to-end eval | Scoring hand-picked passages | Measures what the pipeline actually retrieves, per retrieval mode |
+| End-to-end eval, fact-level answer key | One hand-picked gold passage per question | Measures what the pipeline actually retrieves; credits any passage that states the answer |
 
 ## Evaluation
 
-`eval/run_pipeline_eval.py` sends each of the 20 questions in `eval/datasets/taylor_swift_qa.jsonl` through the real retriever, in hybrid, dense-only and sparse-only modes. Each question has a gold passage from the corpus; a retrieved passage counts as a hit when it contains at least 90% of the gold passage's words.
+`eval/run_pipeline_eval.py` sends each of the 20 questions in `eval/datasets/taylor_swift_qa.jsonl` through the real retriever, in hybrid, dense-only and sparse-only modes, and checks the top 6 passages against an answer key.
 
-| Mode | Hit rate @6 | MRR |
-|---|---|---|
-| Hybrid (RRF) | pending | pending |
-| Dense only | pending | pending |
-| Sparse only | pending | pending |
+**The answer key** lists, for each question, the facts the answer needs (26 facts in total) and every sentence in the corpus that states each fact (56 sentences, all copied verbatim and checked by a unit test). A question counts as **answered** only when every one of its facts appears in a retrieved passage. A passage contains a sentence when it holds at least 90% of the sentence's words.
 
-Per-question results and a dated summary are in `eval/results/`. With `--ragas`, the script also generates answers with the real generator and scores RAGAS context precision and recall; `--full` adds faithfulness and answer relevancy, which need several LLM calls per question and are slow on CPU.
+| Mode | Answered @6 | MRR | Facts found |
+|---|---|---|---|
+| Hybrid (RRF) | **85%** (17/20) | 0.48 | 88% |
+| Dense only | 80% (16/20) | 0.50 | 85% |
+| Sparse only | 80% (16/20) | 0.53 | 83% |
+
+**What this shows**
+
+- On 20 questions the three modes are within one question of each other, so none is clearly better. Hybrid answers the most questions; sparse ranks its answers highest.
+- Three questions fail in every mode. "Why are Folklore and Evermore called sister albums?" never retrieves the passage that says so; "What genre shift did Folklore represent?" never retrieves its answer sentence; "How was Folklore announced?" finds the release date but not the announcement. These are retrieval problems, not answer-key problems, and a reranker over a wider candidate set is the next thing to try.
+- An earlier version of this eval matched one hand-picked passage per question. It scored hybrid at 50% and dense at 60%, but reviewing the misses showed the key was wrong: the Wikipedia pages repeat facts across passages, and two gold passages didn't contain their answer at all. Rebuilding the key changed the conclusion.
+
+Per-question results (retrieved passages, rank, facts found) and a dated summary are in `eval/results/`. After changing only the answer key, `python -m eval.rescore` rescores the saved passages without Qdrant or the embedding model. With `--ragas`, `run_pipeline_eval` also generates answers with the real generator and scores RAGAS context precision and recall; `--full` adds faithfulness and answer relevancy, which need several LLM calls per question and are slow on CPU.
 
 ## Quick Start
 
@@ -80,6 +88,7 @@ curl -X POST http://localhost:8000/api/v1/query/stream \
 python -m scripts.ingest_taylor_swift      # recreates the collection from data/
 python -m eval.run_pipeline_eval           # retrieval metrics, all three modes
 python -m eval.run_pipeline_eval --modes hybrid --ragas   # + RAGAS context metrics
+python -m eval.rescore                     # rescore saved results after editing the answer key
 pytest tests/                              # unit + API tests, no services needed
 ```
 
