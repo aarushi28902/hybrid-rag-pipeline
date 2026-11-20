@@ -1,7 +1,8 @@
 from src.rag.retrieval.hybrid_search import SearchResult
 
 SYSTEM_PROMPT = """You are a precise research assistant. Answer the user's question
-using ONLY the provided context. If the context does not contain the answer, say so."""
+using ONLY the provided context. Cite the passages you used with their numbers,
+like [1] or [2][3]. If the context does not contain the answer, say so."""
 
 
 def build_rag_prompt(query: str, chunks: list[SearchResult]) -> list[dict]:

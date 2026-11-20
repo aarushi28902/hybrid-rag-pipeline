@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     chunk_size: int = 512
     chunk_overlap: int = 64
     top_k: int = 6
+    # Reranking: retrieve rerank_candidates parents, rerank, keep top_k.
+    rerank_enabled: bool = True
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    rerank_candidates: int = 30
+    # Abstain (answer "not in the documents") when the best reranked passage
+    # scores below this. Chosen from the eval: eval/results/summary.json.
+    abstain_threshold: float = 0.05
     log_level: str = "INFO"
 
 

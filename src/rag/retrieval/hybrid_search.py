@@ -20,6 +20,7 @@ class SearchResult:
     score: float
     matched_text: str = ""  # the child text that actually matched
     source: str = ""
+    rerank_score: float | None = None  # cross-encoder relevance in [0, 1], if reranked
 
 
 def rrf_fuse(ranked_lists: list[list[str]], k: int = RRF_K) -> list[tuple[str, float]]:
